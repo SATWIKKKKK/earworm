@@ -1176,6 +1176,11 @@ button.np-title:hover {
   cursor: pointer;
 }
 .sheet .queue.in-sheet {
+  /* undo the app layout's queue placement (grid column 3), which pushed the
+     queue into an extra column of the sheet and squashed the controls */
+  grid-area: auto;
+  min-width: 0;
+  min-height: 0;
   background: none;
   border: 0;
   height: 100%;
