@@ -1,6 +1,6 @@
-import { Clock3, Heart, Library, Plus, Volume2 } from "lucide-react";
+import { Clock3, Heart, Library, MoreHorizontal, Plus, Volume2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { newPlaylist } from "../actions";
+import { libraryMenu, newPlaylist } from "../actions";
 import { fmtBytes } from "../lib/util";
 import { storageEstimate } from "../lib/db";
 import { sameView, useStore, type View } from "../store";
@@ -32,7 +32,10 @@ export function Sidebar() {
           <path d="M7 21c0-5 4-10 9-10s9 5 9 10" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" />
           <circle cx="16" cy="21" r="2.8" fill="currentColor" />
         </svg>
-        Earworm
+        Instahits
+        <button className="icon-btn sm brand-more" onClick={(e) => libraryMenu(e.currentTarget.getBoundingClientRect())} aria-label="Library options" title="Back up or restore your songs">
+          <MoreHorizontal size={16} />
+        </button>
       </div>
 
       <nav className="nav">

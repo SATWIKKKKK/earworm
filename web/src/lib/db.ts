@@ -1,7 +1,7 @@
 // Tiny IndexedDB wrapper. Audio and cover art live here (too big for localStorage).
 
 type StoreName = "audio" | "covers";
-const DB_NAME = "earworm";
+const DB_NAME = "earworm"; // the app was called Earworm; renaming this would orphan saved songs
 const VERSION = 1;
 
 let dbp: Promise<IDBDatabase> | null = null;

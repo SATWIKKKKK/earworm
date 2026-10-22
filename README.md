@@ -1,4 +1,4 @@
-# Earworm
+# Instahits
 
 Paste an Instagram reel or X (Twitter) video link and it becomes a song in your own little music player. The audio is saved in your browser (IndexedDB), so it plays offline and keeps working even if the post gets deleted.
 
@@ -41,7 +41,8 @@ Production without Vercel: `npm run build && npm start` (serves on :8787), or `d
 
 - Paste one link or several at once; paste anywhere on the page works too. Drag in audio/video files from your computer.
 - Songs are named after the actual song, not the post's caption: Instagram's own song tag when the reel has one, otherwise Shazam recognises it from the audio. Only when neither knows does the caption's first line become the title (without hashtags, emoji or links).
-- Your library lives only in your browser. Every visitor gets their own empty library; nobody else can see yours, and there are no accounts.
+- Your library lives only in your browser. Every visitor gets their own empty library; nobody else can see yours, and there are no accounts. The server stores nothing: it only looks up posts and passes the media through.
+- Library menu (••• next to the logo): save a backup file of all songs, likes and playlists, and restore it in another browser or phone. On the old earworm-steel.vercel.app address it also offers "Move my songs to Instahits", which opens instahits.vercel.app and hands the library over directly (browsers keep each address's storage separate).
 - Library with search and sorting (recently added, title, artist, most played, length)
 - Liked songs, Recently played, playlists (create, rename, delete, drag to reorder, drag songs onto a playlist in the sidebar)
 - Play next / Add to queue, queue panel with "Next in queue" and "Next from …"

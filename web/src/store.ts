@@ -348,7 +348,7 @@ export const useStore = create<State>()(
       setResumeAt: (resumeAt) => set({ resumeAt }),
     }),
     {
-      name: "earworm",
+      name: "earworm", // storage key from the Earworm days; keep it or saved libraries vanish
       version: 1,
       partialize: (s) => ({
         tracks: s.tracks,

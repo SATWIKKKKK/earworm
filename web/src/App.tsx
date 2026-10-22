@@ -1,4 +1,4 @@
-import { Heart, Library, ListMusic } from "lucide-react";
+import { Heart, Library, ListMusic, MoreHorizontal } from "lucide-react";
 import { useEffect, useState, type CSSProperties } from "react";
 import { AddBar } from "./components/AddBar";
 import { NowPlaying } from "./components/NowPlaying";
@@ -8,9 +8,10 @@ import { PlaylistsView } from "./components/PlaylistsView";
 import { QueuePanel } from "./components/QueuePanel";
 import { Sidebar } from "./components/Sidebar";
 import { TrackView } from "./components/TrackView";
-import { cycleRepeat } from "./actions";
+import { cycleRepeat, libraryMenu, moveToInstahits } from "./actions";
 import { audio, previous, seek } from "./engine";
 import { useMedia } from "./hooks";
+import { onOldSite, receiveLibraryFromOldSite } from "./lib/backup";
 import { extractLinks, importFiles, importLink, refreshOldTracks } from "./importer";
 import { useStore, type View } from "./store";
 import { toast } from "./toast";
@@ -25,6 +26,13 @@ export default function App() {
 
   useShortcuts();
   useEffect(() => void refreshOldTracks(), []);
+  useEffect(
+    () =>
+      receiveLibraryFromOldSite((n) =>
+        toast(n ? `Your ${n} ${n === 1 ? "song is" : "songs are"} here now. Welcome to Instahits!` : "Your songs were already here.", { ms: 8000 }),
+      ),
+    [],
+  );
 
   // Paste a link anywhere on the page to add it.
   useEffect(() => {
@@ -71,6 +79,7 @@ export default function App() {
       {!mobile && <Sidebar />}
       <main className="main">
         {mobile && <MobileTop />}
+        {onOldSite() && <MoveBanner />}
         <AddBar />
         {view.kind === "playlists" ? <PlaylistsView /> : <TrackView key={JSON.stringify(view)} view={view} />}
       </main>
@@ -104,8 +113,25 @@ function MobileTop() {
           <path d="M7 21c0-5 4-10 9-10s9 5 9 10" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" />
           <circle cx="16" cy="21" r="2.8" fill="currentColor" />
         </svg>
-        Earworm
+        Instahits
       </div>
+      <button className="icon-btn" onClick={(e) => libraryMenu(e.currentTarget.getBoundingClientRect())} aria-label="Library options" title="Back up or restore your songs">
+        <MoreHorizontal size={20} />
+      </button>
+    </div>
+  );
+}
+
+/** Only on the old earworm-steel address: carry the library over to Instahits. */
+function MoveBanner() {
+  return (
+    <div className="move-banner">
+      <p>
+        <strong>Earworm is now Instahits.</strong> Your songs are saved on this address; move them to instahits.vercel.app in one tap.
+      </p>
+      <button className="btn primary" onClick={moveToInstahits}>
+        Move my songs
+      </button>
     </div>
   );
 }

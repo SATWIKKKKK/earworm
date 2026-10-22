@@ -1,4 +1,5 @@
-import { ArrowDownToLine, ExternalLink, Heart, ListEnd, ListPlus, ListStart, Pencil, Plus, Trash2, X } from "lucide-react";
+import { ArchiveRestore, ArrowDownToLine, ExternalLink, Heart, ListEnd, ListPlus, ListStart, Pencil, Plus, Save, Send, Trash2, X } from "lucide-react";
+import { collectLibrary, onOldSite, packLibrary, restoreLibrary, sendLibraryToNewSite, unpackLibrary } from "./lib/backup";
 import { db } from "./lib/db";
 import { useStore, type View } from "./store";
 import { toast } from "./toast";
@@ -76,7 +77,10 @@ export async function downloadTrack(id: string) {
   const blob = await db.get("audio", id);
   if (!t || !blob) return;
   const ext = blob.type.includes("mpeg") ? "mp3" : blob.type.startsWith("audio/mp4") ? "m4a" : blob.type.split("/")[1]?.split(";")[0] || "audio";
-  const name = `${t.title.replace(/[\\/:*?"<>|]+/g, "").slice(0, 80) || "track"}.${ext}`;
+  await saveFile(blob, `${t.title.replace(/[\\/:*?"<>|]+/g, "").slice(0, 80) || "track"}.${ext}`);
+}
+
+async function saveFile(blob: Blob, name: string) {
   // iPhone browsers ignore download links; their share sheet has "Save to Files"
   const file = new File([blob], name, { type: blob.type });
   if (/iPhone|iPad|iPod/.test(navigator.userAgent) && navigator.canShare?.({ files: [file] })) {
@@ -88,6 +92,45 @@ export async function downloadTrack(id: string) {
   a.download = name;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+
+export function moveToInstahits() {
+  toast("Moving your songs to Instahits…");
+  sendLibraryToNewSite(
+    (n) => toast(n ? `Moved ${n} ${n === 1 ? "song" : "songs"} to Instahits. Use instahits.vercel.app from now on.` : "Instahits already has all your songs.", { ms: 8000 }),
+    (why) => toast(why, { ms: 8000 }),
+  );
+}
+
+async function saveBackup() {
+  if (!useStore.getState().order.length) return toast("There are no songs to back up yet.");
+  toast("Preparing your backup…");
+  await saveFile(packLibrary(await collectLibrary()), `instahits-backup-${new Date().toISOString().slice(0, 10)}.instahits`);
+}
+
+function restoreBackup() {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = ".instahits,application/octet-stream";
+  input.onchange = async () => {
+    const f = input.files?.[0];
+    if (!f) return;
+    try {
+      const n = await restoreLibrary(await unpackLibrary(f));
+      toast(n ? `Restored ${n} ${n === 1 ? "song" : "songs"}.` : "Every song in that backup is already here.");
+    } catch (e) {
+      toast((e as Error).message || "Couldn't read that backup.");
+    }
+  };
+  input.click();
+}
+
+export function libraryMenu(at: DOMRect) {
+  openMenu(at, [
+    ...(onOldSite() ? [{ label: "Move my songs to Instahits", icon: <Send {...I} />, run: moveToInstahits }, "sep" as const] : []),
+    { label: "Save a backup", icon: <Save {...I} />, run: saveBackup },
+    { label: "Restore a backup", icon: <ArchiveRestore {...I} />, run: restoreBackup },
+  ]);
 }
 
 export function trackMenu(e: { clientX: number; clientY: number } | DOMRect, id: string, where?: { view: View; index: number }) {

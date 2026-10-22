@@ -219,7 +219,7 @@ async function updateMediaSession() {
   navigator.mediaSession.metadata = new MediaMetadata({
     title: t.title,
     artist: t.artist,
-    album: s.context?.label ?? "Earworm",
+    album: s.context?.label ?? "Instahits",
     artwork: art ? [{ src: art, sizes: "512x512", type: "image/jpeg" }] : [],
   });
 }
