@@ -11,7 +11,8 @@ let n = 0;
 
 export function toast(text: string, opts?: { action?: Toast["action"]; ms?: number }) {
   const id = ++n;
-  useToasts.setState((s) => ({ toasts: [...s.toasts.slice(-1), { id, text, action: opts?.action }] }));
+  // one at a time: stacked toasts cover the track list
+  useToasts.setState({ toasts: [{ id, text, action: opts?.action }] });
   setTimeout(() => dismissToast(id), opts?.ms ?? 3800);
 }
 

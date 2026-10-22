@@ -116,7 +116,8 @@ export async function importLink(rawUrl: string) {
     };
     useStore.getState().addTrack(track);
     dismissJob(jobId);
-    toast(`Added “${track.title}”.`, { action: { label: "Play", run: () => playOne(id) } });
+    const short = track.title.length > 40 ? track.title.slice(0, 38).trimEnd() + "…" : track.title;
+    toast(`Added “${short}”`, { action: { label: "Play", run: () => playOne(id) } });
   } catch (e) {
     const msg = e instanceof TypeError ? "Can't reach the server. Is it running?" : (e as Error).message;
     setJob(jobId, { state: "error", error: msg });
