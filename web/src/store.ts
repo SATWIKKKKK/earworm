@@ -22,11 +22,13 @@ export interface Track {
   caption?: string; // the post's text, when the title is something else
   song?: boolean; // title/artist name a real song (Instagram's tag or Shazam), not the caption
   edited?: boolean; // the user renamed it; never overwrite
-  named?: number; // NAMING version the title was worked out with (missing on old tracks)
+  named?: number; // NAMING version the track was last refreshed with (missing on old tracks)
+  video?: boolean; // the saved file is the post's video (with sound), not audio only
 }
 
-/** Bump to re-run song naming on tracks named by an older version. */
-export const NAMING = 1;
+/** Bump to refresh tracks saved by an older version (names, and Instagram media:
+ * v2 replaces the fragmented audio-only files iPhones can't play with the video). */
+export const NAMING = 2;
 
 export interface Playlist {
   id: string;

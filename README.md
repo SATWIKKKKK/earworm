@@ -46,7 +46,7 @@ Production without Vercel: `npm run build && npm start` (serves on :8787), or `d
 - Liked songs, Recently played, playlists (create, rename, delete, drag to reorder, drag songs onto a playlist in the sidebar)
 - Play next / Add to queue, queue panel with "Next in queue" and "Next from …"
 - Shuffle, loop this song / loop all (keeps looping with the tab in the background or the phone locked), seek, volume, playback speed
-- Full-screen player tinted by the cover art; mobile layout with mini player and swipe-down to close
+- Full-screen player tinted by the cover art, showing the post's original video (muted, kept in step with the sound through seeks, pauses and loops); mobile layout with mini player and swipe-down to close
 - Back buttons on every page, and the browser/phone back button steps back through pages and closes the player
 - Lock screen / headphone / media key controls (Media Session API)
 - Remembers the last song, position, volume, shuffle and repeat across reloads
@@ -56,7 +56,7 @@ Keyboard: `Space` play/pause, `←/→` seek 5s, `Shift+←/→` previous/next, 
 
 ## How it works
 
-- `api/extract.py` — `POST /api/extract {url}`. yt-dlp finds the post's audio-only stream (or the smallest video with audio) without downloading it, and returns metadata plus the media URL.
+- `api/extract.py` — `POST /api/extract {url}`. yt-dlp finds the post's plain mp4 (picture and sound, up to 720p) without downloading it, and returns metadata plus the media URL. Instagram's audio-only stream is a fragmented DASH file that iPhones won't play, so it's only a fallback.
 - `api/identify.py` — `POST /api/identify` with a ~12 s 16 kHz WAV clip that the browser cuts from the saved audio. Asks Shazam (via shazamio) what song it is. Best effort: no match just keeps the caption title.
 - `api/media.js` — `GET /api/media?u=…`. Streams the file from Instagram/X's CDN to the browser (streaming avoids Vercel's 4.5 MB response cap; only those CDNs are allowed).
 - `web/` — React + TypeScript + Vite + Zustand. Saves the audio into IndexedDB and plays it from there forever after.

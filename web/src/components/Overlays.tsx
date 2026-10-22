@@ -37,14 +37,18 @@ export function MenuHost() {
       }
     };
     const away = () => closeMenu();
+    // phones fire resize when the browser toolbar slides in or out, often right
+    // under the finger tapping a menu item; only a width change means the layout moved
+    const width = innerWidth;
+    const resized = () => innerWidth !== width && closeMenu();
     window.addEventListener("pointerdown", down, true);
     window.addEventListener("keydown", key, true);
-    window.addEventListener("resize", away);
+    window.addEventListener("resize", resized);
     window.addEventListener("wheel", away, { passive: true });
     return () => {
       window.removeEventListener("pointerdown", down, true);
       window.removeEventListener("keydown", key, true);
-      window.removeEventListener("resize", away);
+      window.removeEventListener("resize", resized);
       window.removeEventListener("wheel", away);
     };
   }, [open, sub]);

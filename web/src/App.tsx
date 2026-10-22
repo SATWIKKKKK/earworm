@@ -11,7 +11,7 @@ import { TrackView } from "./components/TrackView";
 import { cycleRepeat } from "./actions";
 import { audio, previous, seek } from "./engine";
 import { useMedia } from "./hooks";
-import { extractLinks, importFiles, importLink, nameOldTracks } from "./importer";
+import { extractLinks, importFiles, importLink, refreshOldTracks } from "./importer";
 import { useStore, type View } from "./store";
 import { toast } from "./toast";
 
@@ -24,7 +24,7 @@ export default function App() {
   const [dropping, setDropping] = useState(false);
 
   useShortcuts();
-  useEffect(() => void nameOldTracks(), []);
+  useEffect(() => void refreshOldTracks(), []);
 
   // Paste a link anywhere on the page to add it.
   useEffect(() => {

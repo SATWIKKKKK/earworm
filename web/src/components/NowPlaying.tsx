@@ -4,6 +4,7 @@ import { trackMenu } from "../actions";
 import { useStore } from "../store";
 import { Cover, SourceMark } from "./bits";
 import { LikeButton, Seek, Transport } from "./PlayerBar";
+import { PostVideo } from "./PostVideo";
 import { QueuePanel } from "./QueuePanel";
 
 export function NowPlaying() {
@@ -57,7 +58,7 @@ export function NowPlaying() {
           <QueuePanel inSheet />
         ) : (
           <div className="sheet-art">
-            <Cover track={t} className="big" />
+            {t.video ? <PostVideo key={t.id} track={t} /> : <Cover track={t} className="big" />}
           </div>
         )}
         <div className="sheet-controls">

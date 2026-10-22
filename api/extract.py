@@ -4,6 +4,9 @@ Finds the post's audio stream with yt-dlp (no download, no ffmpeg) and returns
 metadata plus the direct media URL. The browser then pulls the bytes through
 /api/media, which streams them so there's no response size cap.
 
+Media: the post's plain mp4 (picture + sound) when there is one, so the player
+can show the original video; "video" says whether it has a picture.
+
 Titles: Instagram's own song tag when the reel has one ("song": true), else the
 caption's first line. The browser then tries /api/identify for untagged audio.
 
@@ -24,15 +27,17 @@ from yt_dlp.extractor.instagram import InstagramBaseIE
 INSTAGRAM = {"instagram.com", "www.instagram.com", "m.instagram.com", "instagr.am"}
 X = {"twitter.com", "www.twitter.com", "mobile.twitter.com", "x.com", "www.x.com", "mobile.x.com"}
 
-# Audio-only stream if the site has one (Instagram usually does), otherwise the
-# smallest progressive video that carries audio (X). Only plain http(s) files:
-# HLS/DASH manifests can't be stitched without ffmpeg. X's progressive mp4s
-# don't report codecs, hence "!=?" (also matches unknown).
+# A plain (progressive) mp4 with both video and sound: it is the original video
+# for the player, and its audio plays everywhere. Instagram's audio-only stream
+# is a fragmented DASH file that iPhones won't play, so it's only a fallback.
+# Only plain http(s) files: HLS/DASH manifests can't be stitched without ffmpeg.
+# Progressive mp4s don't report codecs, hence "!=?" (also matches unknown).
 FORMAT = (
-    "bestaudio[vcodec=none][protocol^=http]"
-    "/worst[acodec!=?none][vcodec!=?none][protocol^=http][ext=mp4]"
-    "/worst[acodec!=?none][protocol^=http]"
+    "b[vcodec!=?none][acodec!=?none][protocol^=http][ext=mp4]"
+    "/bestaudio[vcodec=none][protocol^=http]"
+    "/b[acodec!=?none][protocol^=http]"
 )
+FORMAT_SORT = ["res:720"]  # sharp enough for a phone, without 1080p file sizes
 
 MIME = {"m4a": "audio/mp4", "mp4": "video/mp4", "mp3": "audio/mpeg", "webm": "audio/webm", "aac": "audio/aac"}
 
@@ -41,36 +46,42 @@ class ExtractError(Exception):
     pass
 
 
-def ig_song(product):
-    """Instagram knows which song a reel uses; yt-dlp reads it but drops it."""
+def ig_audio(product):
+    """Instagram knows which song a reel uses; yt-dlp reads it but drops it.
+
+    Returns {"song": {...}} for tagged music, {"sound": "name"} for an original
+    sound the creator renamed (often just a phrase, so only a last resort)."""
     for key in ("clips_metadata", "music_metadata"):
         meta = product.get(key)
         if not isinstance(meta, dict):
             continue
         music = (meta.get("music_info") or {}).get("music_asset_info") or {}
         if music.get("title"):
-            return {"title": music["title"], "artist": music.get("display_artist") or "", "cover": music.get("cover_artwork_uri")}
-        sound = meta.get("original_sound_info") or {}
-        name = (sound.get("original_audio_title") or "").strip()
-        # a renamed original sound is usually "Artist - Song"; the default name tells us nothing
+            return {"song": {"title": music["title"], "artist": music.get("display_artist") or "", "cover": music.get("cover_artwork_uri")}}
+        name = ((meta.get("original_sound_info") or {}).get("original_audio_title") or "").strip()
         if name and name.lower() not in ("original audio", "original sound"):
-            return {"title": name, "artist": (sound.get("ig_artist") or {}).get("username") or "", "cover": None}
-    return None
+            return {"sound": name}
+    return {}
 
 
 _extract_product = InstagramBaseIE._extract_product
 
 
-def _extract_product_with_song(self, product_info, *args, **kwargs):
+def _extract_product_with_audio(self, product_info, *args, **kwargs):
     info = _extract_product(self, product_info, *args, **kwargs)
-    song = ig_song(product_info[0] if isinstance(product_info, list) else product_info)
-    if song:
-        for entry in [info, *(info.get("entries") or [])]:
-            entry["earworm_song"] = song
+    audio = ig_audio(product_info[0] if isinstance(product_info, list) else product_info)
+    for entry in [info, *(info.get("entries") or [])]:
+        entry["earworm_audio"] = audio
     return info
 
 
-InstagramBaseIE._extract_product = _extract_product_with_song
+InstagramBaseIE._extract_product = _extract_product_with_audio
+
+
+def is_silent(info):
+    """True when every stream says outright that it has no sound (silent Instagram posts)."""
+    formats = info.get("formats") or []
+    return bool(formats) and all(f.get("acodec") == "none" for f in formats)
 
 
 def classify(raw):
@@ -106,7 +117,7 @@ def cookie_file():
 def friendly(msg):
     s = msg.lower()
     if "requested format" in s:
-        return "That post's audio is only streamed in pieces, so it can't be saved yet."
+        return "Couldn't find any sound in that post. It may be silent."
     if any(k in s for k in ("login", "cookies", "rate-limit", "authentication", "not available")):
         return "This post needs a logged-in session. Add your cookies to the server (see README) and try again."
     if "no video" in s or "no media" in s:
@@ -169,6 +180,7 @@ def extract(raw):
         "noplaylist": True,
         "playlist_items": "1",
         "format": FORMAT,
+        "format_sort": FORMAT_SORT,
         "skip_download": True,
         "cachedir": False,
         "socket_timeout": 20,
@@ -189,12 +201,16 @@ def extract(raw):
             raise ExtractError("That post has no video or audio to pull from.")
         info = entries[0]
 
+    if is_silent(info):
+        raise ExtractError("That post has no sound to save.")
     media = info.get("url")
     if not media or not str(info.get("protocol", "https")).startswith("http"):
         raise ExtractError("That post's audio is only streamed in pieces, so it can't be saved yet.")
 
     ext = info.get("ext") or "mp4"
-    if info.get("vcodec") in (None, "none") and ext == "mp4":
+    # progressive files don't name their codecs, but they do have a picture size
+    video = info.get("vcodec") != "none" and bool(info.get("vcodec") or info.get("width") or info.get("height"))
+    if not video and ext == "mp4":
         ext = "m4a"
     handle = poster_handle(info, source)
     poster = info.get("uploader") or handle or ("X" if source == "x" else "Instagram")
@@ -202,14 +218,16 @@ def extract(raw):
     if not thumb and info.get("thumbnails"):
         thumb = info["thumbnails"][-1].get("url")
     caption = caption_text(info, source)
-    song = info.get("earworm_song")
+    ig = info.get("earworm_audio") or {}
+    song = ig.get("song")
 
     if song:
         title, artist, cover = song["title"], song["artist"] or poster, song["cover"] or thumb
     else:
-        # no song info: the caption's first line is the best name we have; the
-        # browser may still recognise the song from the audio and rename it
-        title = headline(caption) or (f"Reel by @{handle}" if source == "instagram" and handle else f"Post by {poster}")
+        # no tagged song: the browser asks Shazam next and renames it on a match;
+        # until then the caption's first line (or the sound's name) stands in
+        fallback = f"Reel by @{handle}" if source == "instagram" and handle else f"Post by {poster}"
+        title = headline(caption) or shorten(ig.get("sound") or "", 90) or fallback
         artist, cover = poster, thumb
 
     return {
@@ -224,6 +242,7 @@ def extract(raw):
         "media": media,
         "mime": MIME.get(ext, "audio/mp4"),
         "ext": ext,
+        "video": video,
         "cover": cover,
         "postCover": thumb,
     }

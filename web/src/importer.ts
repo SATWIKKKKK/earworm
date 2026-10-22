@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { db, requestPersistence } from "./lib/db";
+import { blobUrl, db, dropUrl, requestPersistence } from "./lib/db";
 import { identifySong } from "./lib/identify";
 import { coverColor, probeDuration, uid } from "./lib/util";
 import { NAMING, useStore, type Source, type Track } from "./store";
@@ -90,15 +90,7 @@ export async function importLink(rawUrl: string) {
     const data = await res.json().catch(() => ({ error: "The server sent back something unexpected." }));
     if (!res.ok) throw new Error(data.error || "Couldn't pull audio from that link.");
 
-    const via = (u: string) => `/api/media?u=${encodeURIComponent(u)}`;
-    const audioRes = await fetch(via(data.media));
-    if (!audioRes.ok) {
-      const e = await audioRes.json().catch(() => null);
-      throw new Error(e?.error || "The audio couldn't be downloaded. Try again.");
-    }
-    const raw = await audioRes.blob();
-    if (!raw.size) throw new Error("The audio came back empty. Try again.");
-    const audioBlob = raw.type.startsWith("audio/") || raw.type.startsWith("video/") ? raw : new Blob([raw], { type: data.mime || "audio/mp4" });
+    const audioBlob = await downloadMedia(data);
 
     const id = uid();
     let hasCover = false;
@@ -137,6 +129,7 @@ export async function importLink(rawUrl: string) {
       caption: data.caption || undefined,
       song: !!data.song,
       named: NAMING,
+      video: !!data.video,
     };
     useStore.getState().addTrack(track);
     dismissJob(jobId);
@@ -146,6 +139,20 @@ export async function importLink(rawUrl: string) {
   } catch (e) {
     setJob(jobId, { state: "error", error: friendlyError(e) });
   }
+}
+
+const via = (u: string) => `/api/media?u=${encodeURIComponent(u)}`;
+
+/** Fetches the post's media file (found by /api/extract) through our proxy. */
+async function downloadMedia(data: { media: string; mime?: string }) {
+  const res = await fetch(via(data.media));
+  if (!res.ok) {
+    const e = await res.json().catch(() => null);
+    throw new Error(e?.error || "The audio couldn't be downloaded. Try again.");
+  }
+  const raw = await res.blob();
+  if (!raw.size) throw new Error("The audio came back empty. Try again.");
+  return raw.type.startsWith("audio/") || raw.type.startsWith("video/") ? raw : new Blob([raw], { type: data.mime || "audio/mp4" });
 }
 
 function friendlyError(e: unknown) {
@@ -168,34 +175,53 @@ async function nameFromAudio(id: string) {
   });
 }
 
-let naming = false;
+let refreshing = false;
 
-/** Songs added before song naming existed get looked up again, once each. */
-export async function nameOldTracks() {
-  if (naming) return;
-  naming = true;
+/**
+ * Brings songs saved by older versions up to date, once each (see NAMING):
+ * names (Instagram's song tag, then Shazam, then the caption) unless the user
+ * renamed it, and Instagram media, which used to be a fragmented audio-only
+ * file that iPhones won't play; it's replaced with the post's video.
+ */
+export async function refreshOldTracks() {
+  if (refreshing) return;
+  refreshing = true;
   try {
-    const old = Object.values(useStore.getState().tracks).filter((t) => (t.named ?? 0) < NAMING && !t.edited);
+    const old = Object.values(useStore.getState().tracks).filter((t) => (t.named ?? 0) < NAMING);
     for (const t of old) {
       if (!navigator.onLine) return;
       const patch: Partial<Track> = { named: NAMING };
+      let d: { title?: string; artist?: string; handle?: string; caption?: string; song?: boolean; video?: boolean; media?: string; mime?: string } | null = null;
       if (t.url) {
-        let res: Response;
         try {
-          res = await fetch("/api/extract", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: t.url }) });
+          const res = await fetch("/api/extract", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: t.url }) });
+          d = res.ok ? await res.json().catch(() => null) : null;
         } catch {
           return; // offline or server down: try again next visit
         }
-        const d = res.ok ? await res.json().catch(() => null) : null;
-        if (d?.title) Object.assign(patch, { title: d.title, artist: d.artist, handle: d.handle, caption: d.caption || undefined, song: !!d.song });
+      }
+      if (d?.video && d.media && !t.video) {
+        try {
+          const blob = await downloadMedia({ media: d.media, mime: d.mime });
+          await db.put("audio", t.id, blob);
+          dropUrl("audio", t.id); // if it's loaded right now, the old file keeps playing until the next song
+          blobUrl("audio", t.id);
+          Object.assign(patch, { video: true, size: blob.size });
+        } catch {
+          /* keep the old file; the post may be gone */
+        }
+      } else if (!t.video) {
+        const blob = await db.get("audio", t.id).catch(() => undefined);
+        if (blob?.type.startsWith("video/")) patch.video = true;
       }
       const cur = useStore.getState().tracks[t.id];
-      if (!cur || cur.edited) continue;
+      if (!cur) continue;
+      if (!cur.edited && d?.title) Object.assign(patch, { title: d.title, artist: d.artist, handle: d.handle, caption: d.caption || undefined, song: !!d.song });
       useStore.getState().updateTrack(t.id, patch);
-      if (!patch.song) await nameFromAudio(t.id);
+      if (!cur.edited && !(patch.song ?? cur.song)) await nameFromAudio(t.id);
     }
   } finally {
-    naming = false;
+    refreshing = false;
   }
 }
 
@@ -220,6 +246,7 @@ export async function importFiles(files: FileList | File[]) {
       hasCover: false,
       size: f.size,
       named: NAMING,
+      video: f.type.startsWith("video/"),
     });
     nameFromAudio(id);
   }

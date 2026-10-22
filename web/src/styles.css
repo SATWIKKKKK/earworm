@@ -985,6 +985,15 @@ button.np-title:hover {
 .slider:focus-visible {
   outline: none;
 }
+/* no hover on touch screens: always show where the playhead is, with a bigger target */
+@media (pointer: coarse) {
+  .slider {
+    height: 32px;
+  }
+  .seek-slider .slider-thumb {
+    opacity: 1;
+  }
+}
 .slider:focus-visible .slider-track {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
@@ -1124,22 +1133,25 @@ button.np-title:hover {
   min-height: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(320px, 440px);
+  grid-template-rows: minmax(0, 1fr);
   gap: clamp(24px, 6vw, 96px);
-  align-items: center;
   padding: 0 clamp(20px, 7vw, 120px) 48px;
   max-width: 1280px;
   width: 100%;
   margin: 0 auto;
 }
+/* the art fills whatever space the controls leave, never more: it's a size
+   container and the cover/video are sized in its units */
 .sheet-art {
-  display: flex;
-  justify-content: center;
+  container-type: size;
+  display: grid;
+  place-items: center;
   min-height: 0;
-  height: 100%;
-  align-items: center;
+  min-width: 0;
 }
 .cover.big {
   width: min(100%, 62vh);
+  width: min(100cqw, 100cqh);
   aspect-ratio: 1;
   border-radius: 8px;
   box-shadow: 0 24px 60px rgb(0 0 0 / 0.35);
@@ -1152,6 +1164,17 @@ button.np-title:hover {
   width: 22%;
   height: 22%;
 }
+.post-video {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  max-width: 100cqw;
+  max-height: 100cqh;
+  border-radius: 8px;
+  background: #000;
+  box-shadow: 0 24px 60px rgb(0 0 0 / 0.35);
+  cursor: pointer;
+}
 .sheet .queue.in-sheet {
   background: none;
   border: 0;
@@ -1162,6 +1185,8 @@ button.np-title:hover {
   display: flex;
   flex-direction: column;
   gap: 18px;
+  align-self: center;
+  min-width: 0;
 }
 .sheet-meta {
   display: flex;
@@ -1591,13 +1616,30 @@ button.np-title:hover {
     bottom: 140px;
   }
   .sheet-main {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr) auto;
-    padding: 0 24px 28px;
-    gap: 28px;
+    padding: 0 20px 20px;
+    gap: 20px;
   }
-  .cover.big {
-    width: min(100%, 48vh);
+  .sheet-controls {
+    gap: 14px;
+    align-self: end;
+  }
+  .sheet-title {
+    font-size: 22px;
+    -webkit-line-clamp: 2;
+  }
+  .sheet-caption {
+    margin-top: 6px;
+    -webkit-line-clamp: 1;
+  }
+  .transport.big .play-btn {
+    width: 60px;
+    height: 60px;
+  }
+  .transport.big .icon-btn {
+    width: 44px;
+    height: 44px;
   }
   .sheet .queue.in-sheet {
     max-height: none;

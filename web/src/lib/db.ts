@@ -86,6 +86,12 @@ export function blobUrlNow(store: StoreName, key: string) {
   return resolved.get(`${store}:${key}`);
 }
 
+/** Drops the cached URL without revoking it, so an element still playing the old file keeps working. */
+export function dropUrl(store: StoreName, key: string) {
+  urlCache.delete(`${store}:${key}`);
+  resolved.delete(`${store}:${key}`);
+}
+
 export function forgetUrl(store: StoreName, key: string) {
   const k = `${store}:${key}`;
   const p = urlCache.get(k);

@@ -75,10 +75,17 @@ export async function downloadTrack(id: string) {
   const t = useStore.getState().tracks[id];
   const blob = await db.get("audio", id);
   if (!t || !blob) return;
+  const ext = blob.type.includes("mpeg") ? "mp3" : blob.type.startsWith("audio/mp4") ? "m4a" : blob.type.split("/")[1]?.split(";")[0] || "audio";
+  const name = `${t.title.replace(/[\\/:*?"<>|]+/g, "").slice(0, 80) || "track"}.${ext}`;
+  // iPhone browsers ignore download links; their share sheet has "Save to Files"
+  const file = new File([blob], name, { type: blob.type });
+  if (/iPhone|iPad|iPod/.test(navigator.userAgent) && navigator.canShare?.({ files: [file] })) {
+    await navigator.share({ files: [file] }).catch(() => {});
+    return;
+  }
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  const ext = blob.type.includes("mpeg") ? "mp3" : blob.type.startsWith("audio/mp4") ? "m4a" : blob.type.split("/")[1]?.split(";")[0] || "audio";
-  a.download = `${t.title.replace(/[\\/:*?"<>|]+/g, "").slice(0, 80) || "track"}.${ext}`;
+  a.download = name;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 4000);
 }

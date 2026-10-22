@@ -1,6 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { blobUrl } from "./lib/db";
-import { audio, onTime } from "./engine";
+import { onTime, playheadSnapshot } from "./engine";
 
 export function useCover(id: string | null | undefined, has: boolean | undefined) {
   const [url, setUrl] = useState<string | null>(null);
@@ -15,9 +15,8 @@ export function useCover(id: string | null | undefined, has: boolean | undefined
   return url;
 }
 
-const snap = () => `${audio.currentTime}|${audio.duration}`;
 export function usePlayhead() {
-  const v = useSyncExternalStore(onTime, snap);
+  const v = useSyncExternalStore(onTime, playheadSnapshot);
   const [t, d] = v.split("|").map(Number);
   return { time: t || 0, duration: isFinite(d) ? d : 0 };
 }

@@ -13,6 +13,16 @@ export function onTime(fn: Listener) {
   return () => void timeListeners.delete(fn);
 }
 
+// React reads the playhead through useSyncExternalStore, which needs the same
+// value on every read until we say it changed. Safari's currentTime moves on
+// every read while playing, which sent React into an endless re-render (error #185).
+let snapshot = "0|NaN";
+export const playheadSnapshot = () => snapshot;
+function tick() {
+  snapshot = `${audio.currentTime}|${audio.duration}`;
+  timeListeners.forEach((f) => f());
+}
+
 let loadedId: string | null = null;
 let loadedNonce = -1;
 let countedFor: string | null = null; // play counted once per start, after 10s or half the track
@@ -68,6 +78,9 @@ function prefetchNext() {
 
 export function initEngine() {
   const s0 = useStore.getState();
+  // Resolve every song's audio up front so a tap can start playback in the same
+  // task; iOS only lets audio start inside the tap itself.
+  s0.order.forEach((id) => blobUrl("audio", id));
   audio.volume = s0.muted ? 0 : s0.volume;
   audio.playbackRate = s0.rate;
   audio.loop = s0.repeat === "one";
@@ -94,10 +107,11 @@ export function initEngine() {
     if (s.repeat !== p.repeat) audio.loop = s.repeat === "one";
     if (s.userQueue !== p.userQueue || s.contextIds !== p.contextIds || s.repeat !== p.repeat) prefetchNext();
     if (s.tracks !== p.tracks && s.currentId && s.tracks[s.currentId] !== p.tracks[s.currentId]) updateMediaSession();
+    if (s.order !== p.order) s.order.forEach((id) => blobUrl("audio", id));
   });
 
   audio.addEventListener("timeupdate", () => {
-    timeListeners.forEach((f) => f());
+    tick();
     const s = useStore.getState();
     const id = s.currentId;
     if (audio.currentTime + 1 < lastTime) countedFor = null; // looped (or seeked back): counts as another play
@@ -119,8 +133,9 @@ export function initEngine() {
       }
     }
   });
+  for (const ev of ["seeked", "loadedmetadata", "emptied", "play", "pause"]) audio.addEventListener(ev, tick);
   audio.addEventListener("durationchange", () => {
-    timeListeners.forEach((f) => f());
+    tick();
     const s = useStore.getState();
     const t = s.currentId ? s.tracks[s.currentId] : null;
     if (t && isFinite(audio.duration) && Math.abs(t.duration - audio.duration) > 1) s.updateTrack(t.id, { duration: audio.duration });
@@ -188,7 +203,7 @@ export function seek(t: number) {
   audio.currentTime = Math.max(0, Math.min(t, d - 0.05));
   // dragging the playhead after the song finished should play from there
   if (finished && !s.playing) s.setPlaying(true);
-  timeListeners.forEach((f) => f());
+  tick();
 }
 
 export function previous() {
