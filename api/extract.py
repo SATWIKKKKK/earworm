@@ -4,6 +4,9 @@ Finds the post's audio stream with yt-dlp (no download, no ffmpeg) and returns
 metadata plus the direct media URL. The browser then pulls the bytes through
 /api/media, which streams them so there's no response size cap.
 
+Titles: Instagram's own song tag when the reel has one ("song": true), else the
+caption's first line. The browser then tries /api/identify for untagged audio.
+
 Also runnable as a CLI for local dev:  python3 api/extract.py <url>
 """
 
@@ -16,6 +19,7 @@ from http.server import BaseHTTPRequestHandler
 from urllib.parse import urlparse, urlunparse
 
 import yt_dlp
+from yt_dlp.extractor.instagram import InstagramBaseIE
 
 INSTAGRAM = {"instagram.com", "www.instagram.com", "m.instagram.com", "instagr.am"}
 X = {"twitter.com", "www.twitter.com", "mobile.twitter.com", "x.com", "www.x.com", "mobile.x.com"}
@@ -35,6 +39,38 @@ MIME = {"m4a": "audio/mp4", "mp4": "video/mp4", "mp3": "audio/mpeg", "webm": "au
 
 class ExtractError(Exception):
     pass
+
+
+def ig_song(product):
+    """Instagram knows which song a reel uses; yt-dlp reads it but drops it."""
+    for key in ("clips_metadata", "music_metadata"):
+        meta = product.get(key)
+        if not isinstance(meta, dict):
+            continue
+        music = (meta.get("music_info") or {}).get("music_asset_info") or {}
+        if music.get("title"):
+            return {"title": music["title"], "artist": music.get("display_artist") or "", "cover": music.get("cover_artwork_uri")}
+        sound = meta.get("original_sound_info") or {}
+        name = (sound.get("original_audio_title") or "").strip()
+        # a renamed original sound is usually "Artist - Song"; the default name tells us nothing
+        if name and name.lower() not in ("original audio", "original sound"):
+            return {"title": name, "artist": (sound.get("ig_artist") or {}).get("username") or "", "cover": None}
+    return None
+
+
+_extract_product = InstagramBaseIE._extract_product
+
+
+def _extract_product_with_song(self, product_info, *args, **kwargs):
+    info = _extract_product(self, product_info, *args, **kwargs)
+    song = ig_song(product_info[0] if isinstance(product_info, list) else product_info)
+    if song:
+        for entry in [info, *(info.get("entries") or [])]:
+            entry["earworm_song"] = song
+    return info
+
+
+InstagramBaseIE._extract_product = _extract_product_with_song
 
 
 def classify(raw):
@@ -82,24 +118,43 @@ def friendly(msg):
     return re.sub(r"^.*ERROR:\s*", "", msg.strip().splitlines()[-1])[:200] or "Couldn't pull audio from that link."
 
 
+EMOJI = re.compile("[\U0001F000-\U0001FAFF☀-➿⬀-⯿️‍⃣]+")
+
+
 def clean(s):
     return re.sub(r"\s+", " ", re.sub(r"https?://\S+", "", s or "")).strip()
 
 
-def pick_title(info, source):
-    t = clean(info.get("description") or info.get("title"))
-    if not t or re.match(r"^video by ", t, re.I):
-        t = clean(info.get("title"))
-    up = info.get("uploader") or ""
-    if source == "x" and up and t.startswith(f"{up} - "):
-        t = t[len(up) + 3 :]
-    if re.match(r"^video by ", t, re.I):
-        t = "Reel by " + t[9:]
-    if not t:
-        t = "Post on X" if source == "x" else "Instagram reel"
-    if len(t) > 90:
-        t = re.sub(r"\s+\S*$", "", t[:87]) + "…"
+def caption_text(info, source):
+    t = info.get("description") or ""
+    if source == "x":
+        up = info.get("uploader") or ""
+        t = t or info.get("title") or ""
+        if up and t.startswith(f"{up} - "):
+            t = t[len(up) + 3 :]
     return t
+
+
+def headline(text):
+    """First meaningful line of a caption: no links, hashtags or emoji."""
+    t = re.sub(r"https?://\S+", " ", text or "")
+    t = re.sub(r"(?:^|(?<=\s))[#＃][\w.]+", " ", t)
+    t = EMOJI.sub(" ", t)
+    for line in t.splitlines():
+        line = re.sub(r"\s+", " ", line).strip(" -–—|•·:.,!\"'")
+        if re.search(r"\w", line):
+            return shorten(line, 90)
+    return ""
+
+
+def shorten(t, n):
+    return t if len(t) <= n else re.sub(r"\s+\S*$", "", t[: n - 3]) + "…"
+
+
+def poster_handle(info, source):
+    # Instagram's uploader_id is a numeric account id; the username is "channel"
+    h = info.get("channel") if source == "instagram" else info.get("uploader_id")
+    return str(h or info.get("uploader_id") or "").lstrip("@")
 
 
 def extract(raw):
@@ -141,22 +196,36 @@ def extract(raw):
     ext = info.get("ext") or "mp4"
     if info.get("vcodec") in (None, "none") and ext == "mp4":
         ext = "m4a"
-    handle = info.get("uploader_id") or info.get("channel") or info.get("uploader") or ""
+    handle = poster_handle(info, source)
+    poster = info.get("uploader") or handle or ("X" if source == "x" else "Instagram")
     thumb = info.get("thumbnail")
     if not thumb and info.get("thumbnails"):
         thumb = info["thumbnails"][-1].get("url")
+    caption = caption_text(info, source)
+    song = info.get("earworm_song")
+
+    if song:
+        title, artist, cover = song["title"], song["artist"] or poster, song["cover"] or thumb
+    else:
+        # no song info: the caption's first line is the best name we have; the
+        # browser may still recognise the song from the audio and rename it
+        title = headline(caption) or (f"Reel by @{handle}" if source == "instagram" and handle else f"Post by {poster}")
+        artist, cover = poster, thumb
 
     return {
         "source": source,
         "url": raw.strip(),
-        "title": pick_title(info, source),
-        "artist": info.get("uploader") or handle or ("X" if source == "x" else "Instagram"),
-        "handle": str(handle).lstrip("@"),
+        "title": title,
+        "artist": artist,
+        "song": bool(song),
+        "handle": handle,
+        "caption": shorten(clean(caption), 300),
         "duration": info.get("duration") or 0,
         "media": media,
         "mime": MIME.get(ext, "audio/mp4"),
         "ext": ext,
-        "cover": thumb,
+        "cover": cover,
+        "postCover": thumb,
     }
 
 

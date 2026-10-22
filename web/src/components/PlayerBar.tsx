@@ -1,5 +1,6 @@
 import { Heart, ListMusic, Maximize2, Pause, Play, Repeat, Repeat1, Shuffle, SkipBack, SkipForward, Volume, Volume1, Volume2, VolumeX } from "lucide-react";
 import { useState } from "react";
+import { cycleRepeat } from "../actions";
 import { audio, previous, seek } from "../engine";
 import { usePlayhead } from "../hooks";
 import { fmtTime } from "../lib/util";
@@ -32,9 +33,9 @@ export function Transport({ big = false }: { big?: boolean }) {
       </button>
       <button
         className={`icon-btn ${repeat !== "off" ? "active" : ""}`}
-        onClick={() => s().cycleRepeat()}
-        aria-label={repeat === "off" ? "Repeat all" : repeat === "all" ? "Repeat one" : "Turn off repeat"}
-        title="Repeat (R)"
+        onClick={cycleRepeat}
+        aria-label={repeat === "off" ? "Loop this song" : repeat === "one" ? "Loop all songs" : "Turn off loop"}
+        title={repeat === "off" ? "Loop this song (R)" : repeat === "one" ? "Looping this song. Click to loop all (R)" : "Looping all. Click to turn off (R)"}
       >
         {repeat === "one" ? <Repeat1 size={sz} strokeWidth={1.75} /> : <Repeat size={sz} strokeWidth={1.75} />}
       </button>
@@ -43,7 +44,9 @@ export function Transport({ big = false }: { big?: boolean }) {
 }
 
 export function Seek() {
-  const { time, duration } = usePlayhead();
+  const { time, duration: loaded } = usePlayhead();
+  const listed = useStore((s) => (s.currentId ? s.tracks[s.currentId]?.duration ?? 0 : 0));
+  const duration = loaded || listed; // before the audio's metadata loads, the stored length still lets you seek
   const [preview, setPreview] = useState<number | null>(null);
   return (
     <div className="seek">

@@ -1,7 +1,7 @@
 import { Plus } from "lucide-react";
 import { newPlaylist } from "../actions";
 import { useStore } from "../store";
-import { Cover } from "./bits";
+import { BackButton, Cover } from "./bits";
 import { playlistMenu } from "./Sidebar";
 
 export function PlaylistsView() {
@@ -11,6 +11,7 @@ export function PlaylistsView() {
 
   return (
     <section className="view">
+      <BackButton />
       <header className="view-head">
         <div className="view-titles">
           <h1>Playlists</h1>

@@ -5,7 +5,7 @@ import { useMedia } from "../hooks";
 import { fmtAdded, fmtTime, fmtTotal } from "../lib/util";
 import { idsForView, sameView, useStore, viewLabel, type Track, type View } from "../store";
 import { openMenu } from "../ui";
-import { Bars, Cover, SourceMark } from "./bits";
+import { BackButton, Bars, Cover, SourceMark } from "./bits";
 import { playlistMenu } from "./Sidebar";
 
 type Sort = "custom" | "added" | "title" | "artist" | "plays" | "duration";
@@ -35,7 +35,7 @@ export function TrackView({ view }: { view: View }) {
   const rows = useMemo(() => {
     let r = base.map((id, index) => ({ id, index, t: tracks[id] })).filter((x) => x.t);
     const needle = q.trim().toLowerCase();
-    if (needle) r = r.filter(({ t }) => `${t.title} ${t.artist} ${t.handle ?? ""}`.toLowerCase().includes(needle));
+    if (needle) r = r.filter(({ t }) => `${t.title} ${t.artist} ${t.handle ?? ""} ${t.caption ?? ""}`.toLowerCase().includes(needle));
     const cmp: Record<Sort, ((a: Track, b: Track) => number) | null> = {
       custom: null,
       added: (a, b) => b.addedAt - a.addedAt,
@@ -77,6 +77,7 @@ export function TrackView({ view }: { view: View }) {
 
   return (
     <section className="view">
+      {view.kind !== "songs" && <BackButton />}
       <header className="view-head">
         {playlist && <Mosaic ids={playlist.trackIds} />}
         <div className="view-titles">
@@ -158,6 +159,7 @@ export function TrackView({ view }: { view: View }) {
               dateLabel={view.kind === "recent" ? fmtAdded(t.lastPlayedAt ?? t.addedAt) : view.kind === "liked" ? fmtAdded(liked[id]) : fmtAdded(t.addedAt)}
               onSelect={() => setSelected(id)}
               onPlay={() => playFrom(id, { shuffle: false })}
+              playingFromHere={ctxHere}
               coarse={coarse}
               draggableRow
               reorder={canReorder}
@@ -199,6 +201,7 @@ function Row(p: {
   dateLabel: string;
   onSelect: () => void;
   onPlay: () => void;
+  playingFromHere: boolean;
   coarse: boolean;
   draggableRow: boolean;
   reorder: boolean;
@@ -225,8 +228,12 @@ function Row(p: {
       }}
       onDragOver={p.onDragOverRow}
       onDrop={p.onDropRow}
-      onClick={() => (p.coarse ? p.onPlay() : p.onSelect())}
-      onDoubleClick={() => !p.coarse && p.onPlay()}
+      onClick={(e) => {
+        if (e.detail > 1) return; // second click of a double-click: the first one already played it
+        // the song already playing from this list opens its page; anything else plays
+        if (isCurrent && p.playingFromHere) useStore.getState().setNowPlayingOpen(true);
+        else p.onPlay();
+      }}
       onKeyDown={(e) => {
         if (e.key === "Enter") p.onPlay();
         else if (e.key === "ArrowDown") (e.currentTarget.nextElementSibling as HTMLElement | null)?.focus();
@@ -348,7 +355,7 @@ function Empty({ view }: { view: View }) {
   return (
     <div className="empty">
       <h2>This playlist is empty</h2>
-      <p>Use “Add to playlist” on any song, or drag songs onto this playlist in the sidebar.</p>
+      <p>Open the ••• menu on any song and choose “Add to playlist”.</p>
       <button className="btn" onClick={() => go({ kind: "songs" })}>
         Browse songs
       </button>

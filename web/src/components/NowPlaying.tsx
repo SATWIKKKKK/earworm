@@ -40,7 +40,7 @@ export function NowPlaying() {
       }}
     >
       <div className="sheet-top">
-        <button className="icon-btn" onClick={close} aria-label="Close">
+        <button className="icon-btn" onClick={close} aria-label="Back" title="Back (Esc)">
           <ChevronDown size={24} strokeWidth={1.75} />
         </button>
         <div className="sheet-from">
@@ -67,8 +67,10 @@ export function NowPlaying() {
               <span className="np-artist">
                 <SourceMark source={t.source} size={12} />
                 {t.artist}
-                {t.handle && t.handle !== t.artist ? <span className="handle">@{t.handle}</span> : null}
+                {t.handle && t.handle !== t.artist ? <span className="handle">{t.song ? "via " : ""}@{t.handle}</span> : null}
               </span>
+              {/* when the title is a song name, the post's own words are still worth seeing */}
+              {t.song && t.caption && <p className="sheet-caption">{t.caption}</p>}
             </div>
             <LikeButton id={t.id} size={24} />
           </div>

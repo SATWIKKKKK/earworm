@@ -46,7 +46,14 @@ export async function editTrack(id: string) {
     ],
     confirm: "Save",
   });
-  if (r) useStore.getState().updateTrack(id, { title: r.title.trim() || t.title, artist: r.artist.trim() || t.artist });
+  if (r) useStore.getState().updateTrack(id, { title: r.title.trim() || t.title, artist: r.artist.trim() || t.artist, edited: true });
+}
+
+/** Cycles loop off -> this song -> everything, and says which one is on. */
+export function cycleRepeat() {
+  useStore.getState().cycleRepeat();
+  const s = useStore.getState();
+  toast(s.repeat === "one" ? "Looping this song" : s.repeat === "all" ? `Looping ${s.context?.label ?? "all songs"}` : "Loop off");
 }
 
 export async function deleteTrack(id: string) {

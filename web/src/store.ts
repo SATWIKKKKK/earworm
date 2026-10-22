@@ -19,7 +19,14 @@ export interface Track {
   hasCover: boolean;
   tint?: string; // "hue sat%"
   size?: number;
+  caption?: string; // the post's text, when the title is something else
+  song?: boolean; // title/artist name a real song (Instagram's tag or Shazam), not the caption
+  edited?: boolean; // the user renamed it; never overwrite
+  named?: number; // NAMING version the title was worked out with (missing on old tracks)
 }
+
+/** Bump to re-run song naming on tracks named by an older version. */
+export const NAMING = 1;
 
 export interface Playlist {
   id: string;
@@ -90,7 +97,7 @@ interface State {
 
   // playback actions
   playList: (ids: string[], startId: string | null, ctx: PlayContext, opts?: { shuffle?: boolean }) => void;
-  togglePlay: () => void;
+  togglePlay: (onlyPlay?: boolean) => void;
   setPlaying: (p: boolean) => void;
   next: (auto?: boolean) => void;
   prev: (currentTime: number) => "restart" | "moved";
@@ -148,7 +155,7 @@ export const useStore = create<State>()(
         if (s.currentId === id) {
           set({ playing: false });
           get().next();
-          if (get().currentId === id) set({ currentId: null, pos: -1 });
+          if (get().currentId === id) set({ currentId: null, pos: -1, nowPlayingOpen: false });
         }
         const strip = (a: string[]) => a.filter((x) => x !== id);
         set((s) => {
@@ -248,14 +255,14 @@ export const useStore = create<State>()(
         });
       },
 
-      togglePlay: () => {
+      togglePlay: (onlyPlay = false) => {
         const s = get();
         if (!s.currentId) {
           const ids = s.order;
           if (ids.length) get().playList(ids, null, { label: "Songs", view: { kind: "songs" } });
           return;
         }
-        set({ playing: !s.playing });
+        set({ playing: onlyPlay || !s.playing });
       },
       setPlaying: (playing) => set({ playing }),
 
@@ -275,9 +282,9 @@ export const useStore = create<State>()(
         if (n < s.contextIds.length) {
           set({ pos: n, currentId: s.contextIds[n], playing: true, resumeAt: 0, nonce: get().nonce + 1 });
         } else if (s.contextIds.length && (s.repeat === "all" || !auto)) {
-          // manual skip at end wraps like Spotify does with repeat off, but stops playback
-          const order = s.shuffle ? shuffled(s.contextBase) : s.contextIds;
-          set({ contextIds: order, pos: 0, currentId: order[0], playing: s.repeat === "all", resumeAt: 0, nonce: get().nonce + 1 });
+          // manual skip at end wraps like Spotify does with repeat off, but stops playback.
+          // The order is kept (even shuffled) so the engine can have the first song ready.
+          set({ pos: 0, currentId: s.contextIds[0], playing: s.repeat === "all", resumeAt: 0, nonce: get().nonce + 1 });
         } else {
           set({ playing: false, resumeAt: 0, nonce: get().nonce + 1 });
         }
@@ -309,7 +316,8 @@ export const useStore = create<State>()(
           return { shuffle, contextIds: order, pos: cur ? order.indexOf(cur) : -1 };
         }),
 
-      cycleRepeat: () => set((s) => ({ repeat: s.repeat === "off" ? "all" : s.repeat === "all" ? "one" : "off" })),
+      // one before all: "loop" most often means "play this again"
+      cycleRepeat: () => set((s) => ({ repeat: s.repeat === "off" ? "one" : s.repeat === "one" ? "all" : "off" })),
       setVolume: (v) => set({ volume: Math.min(1, Math.max(0, v)), muted: v <= 0 }),
       toggleMute: () => set((s) => ({ muted: !s.muted, volume: s.muted && s.volume === 0 ? 0.5 : s.volume })),
       setRate: (rate) => set({ rate }),

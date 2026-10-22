@@ -1,7 +1,8 @@
 import { create } from "zustand";
 import { db, requestPersistence } from "./lib/db";
+import { identifySong } from "./lib/identify";
 import { coverColor, probeDuration, uid } from "./lib/util";
-import { useStore, type Source, type Track } from "./store";
+import { NAMING, useStore, type Source, type Track } from "./store";
 import { toast } from "./toast";
 
 export interface Job {
@@ -30,6 +31,16 @@ function sourceOf(url: string): Source | null {
   return null;
 }
 
+/** Links to a single post (not a profile, search or home page). */
+function isPostLink(url: string, source: Source) {
+  try {
+    const path = new URL(url).pathname;
+    return source === "x" ? /\/status(es)?\/\d+/.test(path) : /\/(p|reel|reels|tv|stories)\/[^/]+/.test(path);
+  } catch {
+    return false;
+  }
+}
+
 export function normalizeLink(raw: string) {
   let s = raw.trim();
   if (!/^https?:\/\//i.test(s)) s = "https://" + s;
@@ -55,9 +66,17 @@ export async function importLink(rawUrl: string) {
     toast("Paste an Instagram or X (Twitter) post link.");
     return;
   }
+  if (!isPostLink(url, source)) {
+    toast("That's not a link to a post. Open the post, tap Share, then Copy link.");
+    return;
+  }
   const dupe = Object.values(useStore.getState().tracks).find((t) => t.url && sameLink(t.url, url));
   if (dupe) {
     toast(`Already in your library as “${dupe.title}”.`);
+    return;
+  }
+  if (useJobs.getState().jobs.some((j) => j.state === "working" && j.url && sameLink(j.url, url))) {
+    toast("Already adding that one.");
     return;
   }
   useJobs.setState((s) => ({ jobs: [{ id: jobId, label: prettyLink(url), source, state: "working", url }, ...s.jobs] }));
@@ -84,14 +103,16 @@ export async function importLink(rawUrl: string) {
     const id = uid();
     let hasCover = false;
     let tint: string | undefined;
-    if (data.cover) {
+    // the song's artwork when Instagram tagged one, else the post's thumbnail
+    for (const src of new Set([data.cover, data.postCover].filter(Boolean))) {
       try {
-        const cr = await fetch(via(data.cover));
+        const cr = await fetch(via(src));
         const coverBlob = cr.ok ? await cr.blob() : null;
         if (coverBlob?.size && coverBlob.type.startsWith("image/")) {
           await db.put("covers", id, coverBlob);
           hasCover = true;
           tint = (await coverColor(coverBlob)) ?? undefined;
+          break;
         }
       } catch {
         /* a missing cover isn't worth failing the import over */
@@ -113,14 +134,68 @@ export async function importLink(rawUrl: string) {
       hasCover,
       tint,
       size: audioBlob.size,
+      caption: data.caption || undefined,
+      song: !!data.song,
+      named: NAMING,
     };
     useStore.getState().addTrack(track);
     dismissJob(jobId);
     const short = track.title.length > 40 ? track.title.slice(0, 38).trimEnd() + "…" : track.title;
     toast(`Added “${short}”`, { action: { label: "Play", run: () => playOne(id) } });
+    if (!track.song) nameFromAudio(id);
   } catch (e) {
-    const msg = e instanceof TypeError ? "Can't reach the server. Is it running?" : (e as Error).message;
-    setJob(jobId, { state: "error", error: msg });
+    setJob(jobId, { state: "error", error: friendlyError(e) });
+  }
+}
+
+function friendlyError(e: unknown) {
+  if (e instanceof TypeError) return "Can't reach the server. Check your connection and try again.";
+  if ((e as DOMException)?.name === "QuotaExceededError") return "Your browser is out of space for songs. Delete a few and try again.";
+  return (e as Error)?.message || "Something went wrong. Try again.";
+}
+
+/** Recognises the song from the audio itself and renames the track if it finds one. */
+async function nameFromAudio(id: string) {
+  const blob = await db.get("audio", id).catch(() => undefined);
+  const hit = blob ? await identifySong(blob).catch(() => null) : null;
+  const t = useStore.getState().tracks[id];
+  if (!hit || !t || t.edited) return;
+  useStore.getState().updateTrack(id, {
+    title: hit.title,
+    artist: hit.artist || t.artist,
+    song: true,
+    caption: t.caption ?? (t.source === "file" ? undefined : t.title),
+  });
+}
+
+let naming = false;
+
+/** Songs added before song naming existed get looked up again, once each. */
+export async function nameOldTracks() {
+  if (naming) return;
+  naming = true;
+  try {
+    const old = Object.values(useStore.getState().tracks).filter((t) => (t.named ?? 0) < NAMING && !t.edited);
+    for (const t of old) {
+      if (!navigator.onLine) return;
+      const patch: Partial<Track> = { named: NAMING };
+      if (t.url) {
+        let res: Response;
+        try {
+          res = await fetch("/api/extract", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: t.url }) });
+        } catch {
+          return; // offline or server down: try again next visit
+        }
+        const d = res.ok ? await res.json().catch(() => null) : null;
+        if (d?.title) Object.assign(patch, { title: d.title, artist: d.artist, handle: d.handle, caption: d.caption || undefined, song: !!d.song });
+      }
+      const cur = useStore.getState().tracks[t.id];
+      if (!cur || cur.edited) continue;
+      useStore.getState().updateTrack(t.id, patch);
+      if (!patch.song) await nameFromAudio(t.id);
+    }
+  } finally {
+    naming = false;
   }
 }
 
@@ -144,7 +219,9 @@ export async function importFiles(files: FileList | File[]) {
       plays: 0,
       hasCover: false,
       size: f.size,
+      named: NAMING,
     });
+    nameFromAudio(id);
   }
   requestPersistence();
   toast(list.length === 1 ? "Added 1 file." : `Added ${list.length} files.`);

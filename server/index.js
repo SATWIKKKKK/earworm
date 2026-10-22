@@ -1,6 +1,7 @@
 // Local / Docker server. Runs the exact same code as the Vercel functions in /api:
-//   POST /api/extract -> python3 api/extract.py <url>
-//   GET  /api/media   -> api/media.js
+//   POST /api/extract  -> python3 api/extract.py <url>
+//   POST /api/identify -> python3 api/identify.py < clip.wav
+//   GET  /api/media    -> api/media.js
 import express from "express";
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
@@ -14,6 +15,7 @@ const ROOT = path.join(__dirname, "..");
 const PORT = Number(process.env.PORT) || 8787;
 const PYTHON = process.env.PYTHON || "python3";
 const EXTRACT = process.env.EXTRACT_SCRIPT || path.join(ROOT, "api", "extract.py");
+const IDENTIFY = path.join(ROOT, "api", "identify.py");
 
 const app = express();
 app.use(express.json({ limit: "32kb" }));
@@ -64,6 +66,25 @@ app.post("/api/extract", async (req, res) => {
   } finally {
     release();
   }
+});
+
+// Song recognition is best effort: any failure is reported as "no match".
+app.post("/api/identify", express.raw({ type: "*/*", limit: "2mb" }), (req, res) => {
+  const p = spawn(PYTHON, [IDENTIFY], { stdio: ["pipe", "pipe", "ignore"], env: process.env });
+  let out = "";
+  const t = setTimeout(() => p.kill("SIGKILL"), 30_000);
+  p.stdout.on("data", (d) => (out += d));
+  p.on("error", () => res.json({}));
+  p.on("close", () => {
+    clearTimeout(t);
+    try {
+      const body = JSON.parse(out.trim().split("\n").pop());
+      res.status(body.error ? 400 : 200).json(body);
+    } catch {
+      res.json({});
+    }
+  });
+  p.stdin.end(req.body);
 });
 
 app.get("/api/media", async (req, res) => {

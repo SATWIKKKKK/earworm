@@ -6,6 +6,7 @@
   "outputDirectory": "web/dist",
   "functions": {
     "api/extract.py": { "maxDuration": 60, "excludeFiles": "{web,server,node_modules}/**" },
+    "api/identify.py": { "maxDuration": 30, "excludeFiles": "{web,server,node_modules}/**" },
     "api/media.js": { "maxDuration": 120 }
   },
   "rewrites": [{ "source": "/((?!api/).*)", "destination": "/index.html" }]

@@ -1,6 +1,8 @@
+import { ChevronLeft } from "lucide-react";
 import type { CSSProperties, PointerEvent as RPE } from "react";
 import { useRef, useState } from "react";
 import { useCover } from "../hooks";
+import { goBack } from "../nav";
 import type { Source, Track } from "../store";
 
 export function SourceMark({ source, size = 12 }: { source: Source; size?: number }) {
@@ -122,6 +124,15 @@ export function Slider({
       </div>
       <div className="slider-thumb" />
     </div>
+  );
+}
+
+export function BackButton() {
+  return (
+    <button className="back-btn" onClick={goBack}>
+      <ChevronLeft size={18} strokeWidth={2} />
+      Back
+    </button>
   );
 }
 

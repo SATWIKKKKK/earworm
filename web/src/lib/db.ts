@@ -33,23 +33,57 @@ function tx<T>(store: StoreName, mode: IDBTransactionMode, fn: (s: IDBObjectStor
   );
 }
 
+// Some WebKit builds (Safari private browsing, for one) refuse Blobs in IndexedDB,
+// so those get stored as plain bytes instead.
+interface Packed {
+  type: string;
+  bytes: ArrayBuffer;
+}
+
 export const db = {
-  put: (store: StoreName, key: string, value: Blob) => tx(store, "readwrite", (s) => s.put(value, key)),
-  get: (store: StoreName, key: string) => tx<Blob | undefined>(store, "readonly", (s) => s.get(key)),
+  put: async (store: StoreName, key: string, value: Blob) => {
+    try {
+      await tx(store, "readwrite", (s) => s.put(value, key));
+    } catch (e) {
+      if ((e as DOMException)?.name === "QuotaExceededError") throw e;
+      const packed: Packed = { type: value.type, bytes: await value.arrayBuffer() };
+      await tx(store, "readwrite", (s) => s.put(packed, key));
+    }
+  },
+  get: async (store: StoreName, key: string) => {
+    const v = await tx<Blob | Packed | undefined>(store, "readonly", (s) => s.get(key));
+    return v && !(v instanceof Blob) ? new Blob([v.bytes], { type: v.type }) : v;
+  },
   del: (store: StoreName, key: string) => tx(store, "readwrite", (s) => s.delete(key)),
 };
 
 // Object URLs are cached so the same blob isn't re-read on every render.
 const urlCache = new Map<string, Promise<string | null>>();
+const resolved = new Map<string, string | null>();
 
 export function blobUrl(store: StoreName, key: string): Promise<string | null> {
   const k = `${store}:${key}`;
   let p = urlCache.get(k);
   if (!p) {
-    p = db.get(store, key).then((b) => (b ? URL.createObjectURL(b) : null));
+    p = db.get(store, key).then(
+      (b) => {
+        const u = b ? URL.createObjectURL(b) : null;
+        resolved.set(k, u);
+        return u;
+      },
+      () => {
+        urlCache.delete(k);
+        return null;
+      },
+    );
     urlCache.set(k, p);
   }
   return p;
+}
+
+/** The URL if blobUrl() already resolved it (null = missing), undefined if not known yet. */
+export function blobUrlNow(store: StoreName, key: string) {
+  return resolved.get(`${store}:${key}`);
 }
 
 export function forgetUrl(store: StoreName, key: string) {
@@ -57,6 +91,7 @@ export function forgetUrl(store: StoreName, key: string) {
   const p = urlCache.get(k);
   if (p) p.then((u) => u && URL.revokeObjectURL(u));
   urlCache.delete(k);
+  resolved.delete(k);
 }
 
 export async function storageEstimate() {

@@ -8,9 +8,10 @@ import { PlaylistsView } from "./components/PlaylistsView";
 import { QueuePanel } from "./components/QueuePanel";
 import { Sidebar } from "./components/Sidebar";
 import { TrackView } from "./components/TrackView";
+import { cycleRepeat } from "./actions";
 import { audio, previous, seek } from "./engine";
 import { useMedia } from "./hooks";
-import { extractLinks, importFiles, importLink } from "./importer";
+import { extractLinks, importFiles, importLink, nameOldTracks } from "./importer";
 import { useStore, type View } from "./store";
 import { toast } from "./toast";
 
@@ -23,6 +24,7 @@ export default function App() {
   const [dropping, setDropping] = useState(false);
 
   useShortcuts();
+  useEffect(() => void nameOldTracks(), []);
 
   // Paste a link anywhere on the page to add it.
   useEffect(() => {
@@ -169,7 +171,7 @@ function useShortcuts() {
           break;
         case "r":
         case "R":
-          s.cycleRepeat();
+          cycleRepeat();
           break;
         case "q":
         case "Q":

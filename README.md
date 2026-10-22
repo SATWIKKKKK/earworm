@@ -40,23 +40,27 @@ Production without Vercel: `npm run build && npm start` (serves on :8787), or `d
 ## What it does
 
 - Paste one link or several at once; paste anywhere on the page works too. Drag in audio/video files from your computer.
+- Songs are named after the actual song, not the post's caption: Instagram's own song tag when the reel has one, otherwise Shazam recognises it from the audio. Only when neither knows does the caption's first line become the title (without hashtags, emoji or links).
+- Your library lives only in your browser. Every visitor gets their own empty library; nobody else can see yours, and there are no accounts.
 - Library with search and sorting (recently added, title, artist, most played, length)
 - Liked songs, Recently played, playlists (create, rename, delete, drag to reorder, drag songs onto a playlist in the sidebar)
 - Play next / Add to queue, queue panel with "Next in queue" and "Next from …"
-- Shuffle, repeat all / repeat one, seek, volume, playback speed
+- Shuffle, loop this song / loop all (keeps looping with the tab in the background or the phone locked), seek, volume, playback speed
 - Full-screen player tinted by the cover art; mobile layout with mini player and swipe-down to close
+- Back buttons on every page, and the browser/phone back button steps back through pages and closes the player
 - Lock screen / headphone / media key controls (Media Session API)
 - Remembers the last song, position, volume, shuffle and repeat across reloads
 - Edit title and artist, download the audio, open the original post, delete
 
-Keyboard: `Space` play/pause, `←/→` seek 5s, `Shift+←/→` previous/next, `↑/↓` volume, `M` mute, `L` like, `S` shuffle, `R` repeat, `Q` queue, `/` search.
+Keyboard: `Space` play/pause, `←/→` seek 5s, `Shift+←/→` previous/next, `↑/↓` volume, `M` mute, `L` like, `S` shuffle, `R` loop, `Q` queue, `/` search.
 
 ## How it works
 
 - `api/extract.py` — `POST /api/extract {url}`. yt-dlp finds the post's audio-only stream (or the smallest video with audio) without downloading it, and returns metadata plus the media URL.
+- `api/identify.py` — `POST /api/identify` with a ~12 s 16 kHz WAV clip that the browser cuts from the saved audio. Asks Shazam (via shazamio) what song it is. Best effort: no match just keeps the caption title.
 - `api/media.js` — `GET /api/media?u=…`. Streams the file from Instagram/X's CDN to the browser (streaming avoids Vercel's 4.5 MB response cap; only those CDNs are allowed).
 - `web/` — React + TypeScript + Vite + Zustand. Saves the audio into IndexedDB and plays it from there forever after.
-- `server/` — Express wrapper that runs the same two files, for local dev and Docker.
+- `server/` — Express wrapper that runs the same files, for local dev and Docker.
 
 Your library lives in the browser you added songs from; it doesn't sync between devices.
 

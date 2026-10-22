@@ -109,6 +109,7 @@ p {
   display: grid;
   grid-template-columns: 240px minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr) auto;
+  height: 100vh;
   height: 100dvh;
 }
 .app.with-queue {
@@ -412,6 +413,23 @@ p {
 }
 
 /* ---------- view header ---------- */
+
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 32px;
+  padding: 0 12px 0 6px;
+  margin: -6px 0 14px -6px;
+  border-radius: 16px;
+  color: var(--ink-2);
+  font-weight: 600;
+  font-size: 13.5px;
+}
+.back-btn:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
 
 .view-head {
   display: flex;
@@ -811,6 +829,7 @@ p {
   transition: background-color 0.6s;
 }
 .app.tinted .player {
+  background: var(--bg);
   background: color-mix(in oklab, var(--bg) 90%, hsl(var(--tint) 50%));
 }
 .np {
@@ -1052,7 +1071,8 @@ button.np-title:hover {
   display: flex;
   flex-direction: column;
   --sheet-bg: hsl(var(--tint) 24%);
-  background: color-mix(in oklab, var(--sheet-bg) 100%, transparent);
+  /* a plain colour: older iOS Safari drops color-mix() and the sheet went see-through */
+  background: var(--sheet-bg);
   color: #f3f4f1;
   --ink: #f3f4f1;
   --ink-2: rgb(243 244 241 / 0.72);
@@ -1164,6 +1184,15 @@ button.np-title:hover {
 }
 .sheet .np-artist {
   font-size: 15px;
+}
+.sheet-caption {
+  margin-top: 10px;
+  color: var(--ink-3);
+  font-size: 13.5px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .handle {
   color: var(--ink-3);
@@ -1364,12 +1393,35 @@ button.np-title:hover {
   z-index: 80;
   border: 2px dashed var(--accent);
   border-radius: 16px;
+  background: var(--bg);
   background: color-mix(in oklab, var(--bg) 82%, transparent);
   display: grid;
   place-items: center;
   pointer-events: none;
   font-size: 22px;
   font-weight: 600;
+}
+
+.crash {
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 18vh 24px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+.crash h1 {
+  font-size: 24px;
+}
+.crash p {
+  color: var(--ink-2);
+}
+.crash pre {
+  max-width: 100%;
+  overflow-x: auto;
+  color: var(--ink-3);
+  font-size: 12px;
 }
 
 /* ---------- responsive ---------- */
@@ -1495,6 +1547,7 @@ button.np-title:hover {
     margin: 8px 8px 0;
     padding: 8px 6px 8px 8px;
     border-radius: var(--r-m);
+    background: var(--raised);
     background: color-mix(in oklab, var(--raised) 88%, hsl(var(--tint) 50%));
     overflow: hidden;
     cursor: pointer;
