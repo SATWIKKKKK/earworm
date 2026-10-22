@@ -24,7 +24,7 @@ class IdentifyError(Exception):
 
 
 async def _recognize(wav):
-    out = await asyncio.wait_for(Shazam().recognize(wav), 20)
+    out = await asyncio.wait_for(Shazam().recognize(wav), 12)  # well inside the 30 s function limit
     track = (out or {}).get("track") or {}
     if not track.get("title"):
         return {}
