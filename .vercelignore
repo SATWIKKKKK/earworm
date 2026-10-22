@@ -1,0 +1,6 @@
+web/node_modules
+server/node_modules
+node_modules
+web/dist
+cookies.txt
+*.zip
