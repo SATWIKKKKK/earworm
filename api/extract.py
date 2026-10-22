@@ -22,11 +22,12 @@ X = {"twitter.com", "www.twitter.com", "mobile.twitter.com", "x.com", "www.x.com
 
 # Audio-only stream if the site has one (Instagram usually does), otherwise the
 # smallest progressive video that carries audio (X). Only plain http(s) files:
-# HLS/DASH manifests can't be stitched without ffmpeg.
+# HLS/DASH manifests can't be stitched without ffmpeg. X's progressive mp4s
+# don't report codecs, hence "!=?" (also matches unknown).
 FORMAT = (
     "bestaudio[vcodec=none][protocol^=http]"
-    "/worst[acodec!=none][vcodec!=none][protocol^=http][ext=mp4]"
-    "/worst[acodec!=none][protocol^=http]"
+    "/worst[acodec!=?none][vcodec!=?none][protocol^=http][ext=mp4]"
+    "/worst[acodec!=?none][protocol^=http]"
 )
 
 MIME = {"m4a": "audio/mp4", "mp4": "video/mp4", "mp3": "audio/mpeg", "webm": "audio/webm", "aac": "audio/aac"}
